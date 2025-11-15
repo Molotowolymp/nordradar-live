@@ -1,0 +1,592 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+  <meta charset="UTF-8" />
+  <title>Nordradar – Community Drohnendetektion</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+
+  <!-- Leaflet CSS -->
+  <link
+    rel="stylesheet"
+    href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"
+    integrity="sha256-p4NxAoJBhIIN+hmNHrzRCf9tD/miZyoHS5obTRR9BMY="
+    crossorigin=""
+  />
+
+  <style>
+    :root {
+      --bg: #02040a;
+      --card: #050913;
+      --accent: #00ff88;
+      --accent-soft: #1f5c3d;
+      --accent-warning: #f4b000;
+      --accent-danger: #ff4b4b;
+      --text-main: #e8f6ff;
+      --text-muted: #7c8da4;
+      --border-subtle: #141a26;
+      --btn-radius: 999px;
+      --shadow-soft: 0 0 25px rgba(0, 255, 136, 0.2);
+      --font-mono: "SF Mono", "JetBrains Mono", "Menlo", monospace;
+      --font-sans: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+    }
+
+    * {
+      box-sizing: border-box;
+      margin: 0;
+      padding: 0;
+    }
+
+    body {
+      background: radial-gradient(circle at top, #071626 0, #02040a 55%, #000 100%);
+      color: var(--text-main);
+      font-family: var(--font-sans);
+      min-height: 100vh;
+      display: flex;
+      justify-content: center;
+    }
+
+    .app-shell {
+      width: 100%;
+      max-width: 900px;
+      padding: 16px;
+      padding-bottom: 40px;
+    }
+
+    .badge {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      font-size: 11px;
+      text-transform: uppercase;
+      letter-spacing: 0.1em;
+      color: var(--accent);
+      background: rgba(0, 255, 136, 0.08);
+      border: 1px solid rgba(0, 255, 136, 0.25);
+      border-radius: 999px;
+      padding: 4px 10px;
+      margin-bottom: 10px;
+    }
+
+    .badge-dot {
+      width: 7px;
+      height: 7px;
+      border-radius: 999px;
+      background: var(--accent);
+      box-shadow: 0 0 12px rgba(0, 255, 136, 0.9);
+    }
+
+    header {
+      margin-bottom: 14px;
+    }
+
+    header h1 {
+      font-family: var(--font-mono);
+      font-size: 24px;
+      font-weight: 600;
+      line-height: 1.2;
+    }
+
+    header h1 span {
+      color: var(--accent);
+    }
+
+    header p {
+      font-size: 13px;
+      color: var(--text-muted);
+      margin-top: 6px;
+    }
+
+    .status-card {
+      background: linear-gradient(135deg, #050913, #060f20);
+      border-radius: 16px;
+      padding: 12px 14px;
+      border: 1px solid var(--border-subtle);
+      box-shadow: var(--shadow-soft);
+      margin-bottom: 10px;
+    }
+
+    .status-line-main {
+      font-weight: 600;
+      font-size: 14px;
+    }
+
+    .status-line-main.ok {
+      color: var(--accent);
+    }
+
+    .status-line-main.warn {
+      color: var(--accent-warning);
+    }
+
+    .status-line-main.danger {
+      color: var(--accent-danger);
+    }
+
+    .status-line-sub {
+      margin-top: 4px;
+      font-size: 12px;
+      color: var(--text-muted);
+    }
+
+    .status-line-sub span {
+      margin-right: 8px;
+    }
+
+    .status-line-sub strong {
+      color: var(--accent);
+      font-weight: 600;
+    }
+
+    .location-status {
+      margin: 10px 0 8px;
+      font-size: 12px;
+      color: var(--text-muted);
+    }
+
+    .location-status strong {
+      color: var(--accent);
+    }
+
+    #map {
+      width: 100%;
+      height: 320px;
+      border-radius: 18px;
+      border: 1px solid var(--border-subtle);
+      overflow: hidden;
+      box-shadow: 0 0 30px rgba(0, 255, 136, 0.18);
+    }
+
+    .controls-card {
+      margin-top: 14px;
+      background: rgba(3, 8, 18, 0.96);
+      border-radius: 18px;
+      border: 1px solid var(--border-subtle);
+      padding: 10px 12px 12px;
+    }
+
+    .toggle-row {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      margin-bottom: 10px;
+      font-size: 13px;
+    }
+
+    .toggle-row span {
+      color: var(--text-muted);
+    }
+
+    .toggle-row strong {
+      color: var(--accent);
+    }
+
+    .toggle-input {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      font-size: 12px;
+    }
+
+    .toggle-input input {
+      width: 18px;
+      height: 18px;
+    }
+
+    .buttons {
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+      margin-top: 6px;
+    }
+
+    .btn {
+      border-radius: var(--btn-radius);
+      border: 1px solid transparent;
+      padding: 10px 12px;
+      font-size: 14px;
+      font-weight: 600;
+      letter-spacing: 0.03em;
+      text-transform: uppercase;
+      text-align: center;
+      cursor: pointer;
+      transition: transform 0.08s ease, box-shadow 0.08s ease, background 0.12s ease;
+    }
+
+    .btn:active {
+      transform: scale(0.98);
+      box-shadow: none;
+    }
+
+    .btn-yes {
+      background: linear-gradient(135deg, #00e676, #00c853);
+      color: #000;
+      box-shadow: 0 0 18px rgba(0, 255, 136, 0.6);
+    }
+
+    .btn-maybe {
+      background: linear-gradient(135deg, #ffd54f, #ffb300);
+      color: #2a1b00;
+      box-shadow: 0 0 16px rgba(255, 214, 79, 0.5);
+    }
+
+    .btn-no {
+      background: linear-gradient(135deg, #ff5252, #ff1744);
+      color: #fff;
+      box-shadow: 0 0 16px rgba(255, 82, 82, 0.55);
+    }
+
+    .legend {
+      margin-top: 10px;
+      font-size: 11px;
+      color: var(--text-muted);
+      display: flex;
+      flex-wrap: wrap;
+      gap: 10px;
+    }
+
+    .legend-item {
+      display: inline-flex;
+      align-items: center;
+      gap: 5px;
+    }
+
+    .legend-dot {
+      width: 11px;
+      height: 11px;
+      border-radius: 999px;
+    }
+
+    .dot-suspect {
+      background: var(--accent-warning);
+      box-shadow: 0 0 10px rgba(244, 176, 0, 0.8);
+    }
+
+    .dot-confirmed {
+      background: var(--accent-danger);
+      box-shadow: 0 0 10px rgba(255, 75, 75, 0.9);
+    }
+
+    .dot-radius {
+      background: var(--accent-soft);
+    }
+
+    .footnote {
+      margin-top: 10px;
+      font-size: 10px;
+      color: var(--text-muted);
+      line-height: 1.4;
+    }
+
+    .footnote strong {
+      color: var(--accent);
+    }
+
+    @media (min-width: 720px) {
+      .app-shell {
+        padding-top: 24px;
+      }
+      header h1 {
+        font-size: 26px;
+      }
+      #map {
+        height: 380px;
+      }
+    }
+  </style>
+</head>
+<body>
+  <div class="app-shell">
+    <div class="badge">
+      <span class="badge-dot"></span>
+      Live-Crowd-Radar
+    </div>
+
+    <header>
+      <h1><span>Nordradar</span> – iCatch</h1>
+      <p>Community-gestützte Drohnendetektion. Jede Meldung hilft, den Luftraum sicherer zu machen.</p>
+    </header>
+
+    <div class="status-card" id="statusCard">
+      <div id="statusMain" class="status-line-main ok">
+        Keine bestätigte Drohne im Umkreis.
+      </div>
+      <div id="statusSub" class="status-line-sub">
+        <span>JA: <strong id="countYes">0</strong></span>
+        <span>UNSICHER: <strong id="countMaybe">0</strong></span>
+        <span>NEIN: <strong id="countNo">0</strong></span>
+        <span>verifizierte JA: <strong id="countVerifiedYes">0</strong></span>
+      </div>
+    </div>
+
+    <div class="location-status" id="locationStatus">
+      Standort wird ermittelt…
+    </div>
+
+    <div id="map"></div>
+
+    <div class="controls-card">
+      <div class="toggle-row">
+        <span>Verifizierter Nutzer</span>
+        <label class="toggle-input">
+          <input type="checkbox" id="verifiedToggle" />
+          <span>aktiv</span>
+        </label>
+      </div>
+
+      <div class="buttons">
+        <button class="btn btn-yes" id="btnYes">JA – Drohne gesehen</button>
+        <button class="btn btn-maybe" id="btnMaybe">Ich bin unsicher</button>
+        <button class="btn btn-no" id="btnNo">NEIN – Keine Drohne</button>
+      </div>
+
+      <div class="legend">
+        <span class="legend-item">
+          <span class="legend-dot dot-radius"></span> Aktiver Radius (urban ca. 500 m, ländlich ca. 2 km)
+        </span>
+        <span class="legend-item">
+          <span class="legend-dot dot-suspect"></span> Vermutete Drohne
+        </span>
+        <span class="legend-item">
+          <span class="legend-dot dot-confirmed"></span> Bestätigte Drohne
+        </span>
+      </div>
+
+      <p class="footnote">
+        Logik: <strong>≥ 3× JA</strong> im Radius → Drohne in Lagekarte<br />
+        <strong>≥ 1× verifiziertes JA</strong> → DIC-Bestätigung (Prototyp, lokal – noch ohne Backend).
+      </p>
+    </div>
+  </div>
+
+  <!-- Leaflet JS -->
+  <script
+    src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"
+    integrity="sha256-20nQCchB9co0qIjJZRGuk2/Z9VM+kNiyxNV1lvTlZBo="
+    crossorigin=""
+  ></script>
+
+  <script>
+    // Basiszustand
+    const reports = [];
+    let map, userMarker, radiusCircle;
+    let suspectMarkers = [];
+    let confirmedMarker = null;
+
+    const statusMainEl = document.getElementById("statusMain");
+    const statusSubEl = document.getElementById("statusSub");
+    const statusCardEl = document.getElementById("statusCard");
+    const locStatusEl = document.getElementById("locationStatus");
+    const verifiedToggle = document.getElementById("verifiedToggle");
+
+    const countYesEl = document.getElementById("countYes");
+    const countMaybeEl = document.getElementById("countMaybe");
+    const countNoEl = document.getElementById("countNo");
+    const countVerifiedYesEl = document.getElementById("countVerifiedYes");
+
+    // Radius abhängig von Umgebung (Zoom-Level als Näherung)
+    function getRadiusMeters() {
+      if (!map) return 1000;
+      const z = map.getZoom();
+      return z >= 15 ? 500 : 2000; // Städte enger, Land weiter
+    }
+
+    function initMap(lat, lng) {
+      map = L.map("map", {
+        zoomControl: false,
+        attributionControl: false,
+      }).setView([lat, lng], 15);
+
+      L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png", {
+        maxZoom: 19,
+      }).addTo(map);
+
+      userMarker = L.circleMarker([lat, lng], {
+        radius: 7,
+        color: "#00ff88",
+        fillColor: "#00ff88",
+        fillOpacity: 0.9,
+      })
+        .addTo(map)
+        .bindPopup("Dein Standort");
+
+      radiusCircle = L.circle([lat, lng], {
+        radius: getRadiusMeters(),
+        color: "#1f5c3d",
+        fillColor: "#0b3824",
+        fillOpacity: 0.2,
+        weight: 1,
+      }).addTo(map);
+
+      map.on("zoomend", () => {
+        if (radiusCircle) {
+          radiusCircle.setRadius(getRadiusMeters());
+        }
+      });
+    }
+
+    function updateLocation() {
+      if (!navigator.geolocation) {
+        locStatusEl.textContent =
+          "Standort konnte nicht bestimmt werden (kein Geolocation-Support).";
+        return;
+      }
+
+      navigator.geolocation.getCurrentPosition(
+        (pos) => {
+          const { latitude, longitude } = pos.coords;
+          if (!map) {
+            initMap(latitude, longitude);
+          } else {
+            map.setView([latitude, longitude], 15);
+            userMarker.setLatLng([latitude, longitude]);
+            radiusCircle.setLatLng([latitude, longitude]);
+          }
+          locStatusEl.innerHTML =
+            "Aktueller Standort: <strong>" +
+            latitude.toFixed(5) +
+            " / " +
+            longitude.toFixed(5) +
+            "</strong>";
+        },
+        () => {
+          locStatusEl.textContent =
+            "Standort konnte nicht bestimmt werden (Zugriff verweigert oder Fehler).";
+          // Fallback: Deutschland
+          if (!map) {
+            initMap(52.52, 13.405); // Berlin
+          }
+        },
+        { enableHighAccuracy: true, timeout: 7000, maximumAge: 10000 }
+      );
+    }
+
+    function addReport(confidence) {
+      if (!map) return;
+
+      const center = map.getCenter();
+      const isVerified = verifiedToggle.checked;
+
+      const report = {
+        lat: center.lat,
+        lng: center.lng,
+        confidence,
+        isVerified,
+        ts: Date.now(),
+      };
+      reports.push(report);
+
+      // Marker für vermutete Meldung
+      if (confidence === "yes" || confidence === "maybe") {
+        const color =
+          confidence === "yes" ? "#f4b000" : "#f4e000"; // beide gelblich
+        const m = L.circleMarker([report.lat, report.lng], {
+          radius: 10,
+          color,
+          fillColor: color,
+          fillOpacity: 0.85,
+        })
+          .addTo(map)
+          .bindPopup(
+            (confidence === "yes" ? "JA" : "unsicher") +
+              (isVerified ? " (verifiziert)" : "")
+          );
+        suspectMarkers.push(m);
+      }
+
+      updateStatsAndStatus();
+    }
+
+    function updateStatsAndStatus() {
+      const yes = reports.filter((r) => r.confidence === "yes").length;
+      const maybe = reports.filter((r) => r.confidence === "maybe").length;
+      const no = reports.filter((r) => r.confidence === "no").length;
+      const verifiedYes = reports.filter(
+        (r) => r.confidence === "yes" && r.isVerified
+      ).length;
+
+      countYesEl.textContent = yes;
+      countMaybeEl.textContent = maybe;
+      countNoEl.textContent = no;
+      countVerifiedYesEl.textContent = verifiedYes;
+
+      const radius = getRadiusMeters();
+
+      let statusText = "Keine bestätigte Drohne im Umkreis.";
+      let statusMood = "ok";
+
+      const yesThreshold = yes >= 3;
+      const verifiedHit = verifiedYes >= 1;
+
+      if (verifiedHit) {
+        statusText =
+          "Drohne durch verifizierten Nutzer bestätigt. Radius ~" +
+          (radius / 1000).toFixed(1) +
+          " km.";
+        statusMood = "danger";
+      } else if (yesThreshold) {
+        statusText =
+          "Mehrere Meldungen: Drohne wahrscheinlich im Umkreis von ~" +
+          (radius / 1000).toFixed(1) +
+          " km.";
+        statusMood = "warn";
+      } else if (yes > 0 || maybe > 0) {
+        statusText =
+          "Vermutete Aktivität – weitere Meldungen zur Bestätigung erforderlich.";
+        statusMood = "warn";
+      }
+
+      statusMainEl.textContent = statusText;
+      statusMainEl.classList.remove("ok", "warn", "danger");
+      statusMainEl.classList.add(statusMood);
+
+      // Bestätigten Marker setzen/aktualisieren
+      if (yesThreshold || verifiedHit) {
+        const yesReports = reports.filter((r) => r.confidence === "yes");
+        if (yesReports.length > 0) {
+          const avgLat =
+            yesReports.reduce((sum, r) => sum + r.lat, 0) / yesReports.length;
+          const avgLng =
+            yesReports.reduce((sum, r) => sum + r.lng, 0) / yesReports.length;
+
+          if (!confirmedMarker) {
+            confirmedMarker = L.circleMarker([avgLat, avgLng], {
+              radius: 12,
+              color: "#ff4b4b",
+              fillColor: "#ff4b4b",
+              fillOpacity: 0.9,
+            })
+              .addTo(map)
+              .bindPopup("Bestätigte Drohne (Prototyp-Lagepunkt)");
+          } else {
+            confirmedMarker.setLatLng([avgLat, avgLng]);
+          }
+
+          // Option: verdächtige Marker etwas dimmen
+          suspectMarkers.forEach((m) => m.setStyle({ opacity: 0.4 }));
+        }
+      } else {
+        if (confirmedMarker) {
+          map.removeLayer(confirmedMarker);
+          confirmedMarker = null;
+        }
+        suspectMarkers.forEach((m) => m.setStyle({ opacity: 1 }));
+      }
+    }
+
+    document.getElementById("btnYes").addEventListener("click", () => {
+      addReport("yes");
+    });
+
+    document.getElementById("btnMaybe").addEventListener("click", () => {
+      addReport("maybe");
+    });
+
+    document.getElementById("btnNo").addEventListener("click", () => {
+      addReport("no");
+    });
+
+    // Init
+    updateLocation();
+  </script>
+</body>
+</html>
