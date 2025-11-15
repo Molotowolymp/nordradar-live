@@ -1,0 +1,939 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+  <meta charset="UTF-8" />
+  <title>Nordradar – Community Drohnendetektion</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+
+  <!-- Leaflet CSS -->
+  <link
+    rel="stylesheet"
+    href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"
+    integrity="sha256-p4NxAoJBhIIN+hmNHrzRCf9tD/miZyoHS5obTRR9BMY="
+    crossorigin=""
+  />
+
+  <style>
+    :root {
+      --bg: #020309;
+      --card: #050913;
+      --accent: #00ff88;
+      --accent-soft: #1f5c3d;
+      --accent-warning: #f4b000;
+      --accent-danger: #ff4b4b;
+      --text-main: #e8f6ff;
+      --text-muted: #7c8da4;
+      --border-subtle: #141a26;
+      --btn-radius: 999px;
+      --shadow-soft: 0 0 25px rgba(0, 255, 136, 0.2);
+      --font-mono: "SF Mono", "JetBrains Mono", "Menlo", monospace;
+      --font-sans: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+      --radar-angle: 0deg;
+    }
+
+    * {
+      box-sizing: border-box;
+      margin: 0;
+      padding: 0;
+    }
+
+    body {
+      background: radial-gradient(circle at top, #041524 0, #020309 55%, #000 100%);
+      color: var(--text-main);
+      font-family: var(--font-sans);
+      min-height: 100vh;
+      display: flex;
+      justify-content: center;
+      padding: 12px;
+    }
+
+    .app-shell {
+      width: 100%;
+      max-width: 900px;
+      padding: 20px 18px 40px;
+      border-radius: 24px;
+      background: radial-gradient(
+        circle at top,
+        rgba(0, 255, 136, 0.04),
+        rgba(3, 8, 18, 0.96)
+      );
+      border: 1px solid var(--border-subtle);
+      box-shadow: 0 0 40px rgba(0, 0, 0, 0.55), var(--shadow-soft);
+      backdrop-filter: blur(12px);
+    }
+
+    .badge {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      font-size: 11px;
+      text-transform: uppercase;
+      letter-spacing: 0.1em;
+      color: var(--accent);
+      background: rgba(0, 255, 136, 0.08);
+      border: 1px solid rgba(0, 255, 136, 0.4);
+      border-radius: 999px;
+      padding: 4px 12px;
+      margin-bottom: 12px;
+      box-shadow: 0 0 18px rgba(0, 255, 136, 0.3);
+      animation: badge-pulse 3s ease-in-out infinite;
+    }
+
+    .badge-dot {
+      width: 7px;
+      height: 7px;
+      border-radius: 999px;
+      background: var(--accent);
+      box-shadow: 0 0 12px rgba(0, 255, 136, 0.9);
+    }
+
+    @keyframes badge-pulse {
+      0%, 100% {
+        box-shadow: 0 0 10px rgba(0, 255, 136, 0.25);
+      }
+      50% {
+        box-shadow: 0 0 22px rgba(0, 255, 136, 0.6);
+      }
+    }
+
+    header {
+      margin-bottom: 14px;
+    }
+
+    header h1 {
+      font-family: var(--font-mono);
+      font-size: 24px;
+      font-weight: 600;
+      line-height: 1.2;
+    }
+
+    header h1 span {
+      color: var(--accent);
+    }
+
+    header p {
+      font-size: 13px;
+      color: var(--text-muted);
+      margin-top: 6px;
+    }
+
+    .status-card {
+      background: linear-gradient(135deg, #050913, #060f20);
+      border-radius: 16px;
+      padding: 12px 14px;
+      border: 1px solid var(--border-subtle);
+      box-shadow: var(--shadow-soft);
+      margin-bottom: 10px;
+    }
+
+    .status-line-main {
+      font-weight: 600;
+      font-size: 14px;
+    }
+
+    .status-line-main.ok {
+      color: var(--accent);
+    }
+
+    .status-line-main.warn {
+      color: var(--accent-warning);
+    }
+
+    .status-line-main.danger {
+      color: var(--accent-danger);
+    }
+
+    .status-line-sub {
+      margin-top: 4px;
+      font-size: 12px;
+      color: var(--text-muted);
+    }
+
+    .status-line-sub span {
+      margin-right: 8px;
+    }
+
+    .status-line-sub strong {
+      color: var(--accent);
+      font-weight: 600;
+    }
+
+    .location-status {
+      margin: 10px 0 8px;
+      font-size: 12px;
+      color: var(--text-muted);
+    }
+
+    .location-status strong {
+      color: var(--accent);
+    }
+
+    /* Map + Overlay */
+
+    .map-wrapper {
+      position: relative;
+      width: 100%;
+      height: 320px;
+      border-radius: 18px;
+      border: 1px solid var(--border-subtle);
+      overflow: hidden;
+      box-shadow: 0 0 30px rgba(0, 255, 136, 0.18);
+      background: #020309;
+      margin-bottom: 6px;
+    }
+
+    #map {
+      width: 100%;
+      height: 100%;
+      filter: saturate(0.9) hue-rotate(-30deg);
+    }
+
+    .map-overlay {
+      position: absolute;
+      inset: 0;
+      pointer-events: none;
+      mix-blend-mode: screen;
+      background-image:
+        repeating-linear-gradient(
+          to right,
+          rgba(0, 255, 136, 0.05) 0,
+          rgba(0, 255, 136, 0.05) 1px,
+          transparent 1px,
+          transparent 16px
+        ),
+        repeating-linear-gradient(
+          to bottom,
+          rgba(0, 255, 136, 0.05) 0,
+          rgba(0, 255, 136, 0.05) 1px,
+          transparent 1px,
+          transparent 16px
+        );
+    }
+
+    .map-crosshair {
+      position: absolute;
+      top: 50%;
+      left: 50%;
+      width: 46px;
+      height: 46px;
+      transform: translate(-50%, -50%);
+      border-radius: 50%;
+      border: 1px solid rgba(0, 255, 136, 0.5);
+      box-shadow: 0 0 20px rgba(0, 255, 136, 0.3);
+    }
+
+    .map-crosshair::before,
+    .map-crosshair::after {
+      content: "";
+      position: absolute;
+      background: rgba(0, 255, 136, 0.55);
+    }
+
+    .map-crosshair::before {
+      left: 50%;
+      top: -10px;
+      bottom: -10px;
+      width: 1px;
+      transform: translateX(-50%);
+    }
+
+    .map-crosshair::after {
+      top: 50%;
+      left: -10px;
+      right: -10px;
+      height: 1px;
+      transform: translateY(-50%);
+    }
+
+    /* Controls + Radar-Glow hinter Buttons */
+
+    .controls-card {
+      margin-top: 10px;
+      background: rgba(3, 8, 18, 0.96);
+      border-radius: 18px;
+      border: 1px solid var(--border-subtle);
+      padding: 10px 12px 12px;
+      position: relative;
+      overflow: hidden;
+    }
+
+    .controls-card::before {
+      content: "";
+      position: absolute;
+      bottom: -140px;
+      left: 50%;
+      transform: translateX(-50%);
+      width: 260px;
+      height: 260px;
+      border-radius: 50%;
+      background:
+        radial-gradient(circle, rgba(0, 255, 136, 0.18) 0 60%, transparent 65%),
+        conic-gradient(from var(--radar-angle), rgba(0, 255, 136, 0.45), transparent 40%);
+      opacity: 0.23;
+      pointer-events: none;
+      mix-blend-mode: screen;
+      animation: radar-spin 20s linear infinite;
+    }
+
+    @keyframes radar-spin {
+      0%   { --radar-angle: 0deg; }
+      100% { --radar-angle: 360deg; }
+    }
+
+    .toggle-row {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      margin-bottom: 10px;
+      font-size: 13px;
+      position: relative;
+      z-index: 1;
+    }
+
+    .toggle-row span {
+      color: var(--text-muted);
+    }
+
+    .toggle-row strong {
+      color: var(--accent);
+    }
+
+    .toggle-input {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      font-size: 12px;
+    }
+
+    .toggle-input input {
+      width: 18px;
+      height: 18px;
+    }
+
+    .buttons {
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+      margin-top: 6px;
+      position: relative;
+      z-index: 1;
+    }
+
+    .btn {
+      border-radius: var(--btn-radius);
+      border: 1px solid transparent;
+      padding: 10px 12px;
+      font-size: 14px;
+      font-weight: 600;
+      letter-spacing: 0.03em;
+      text-transform: uppercase;
+      text-align: center;
+      cursor: pointer;
+      transition: transform 0.12s ease, box-shadow 0.12s ease, background 0.12s ease, filter 0.12s ease;
+    }
+
+    .btn:hover {
+      transform: translateY(-1px);
+      filter: brightness(1.03);
+      box-shadow: 0 0 20px rgba(0, 0, 0, 0.7);
+    }
+
+    .btn:active {
+      transform: translateY(0);
+      box-shadow: none;
+      filter: brightness(0.96);
+    }
+
+    .btn-yes {
+      background: linear-gradient(135deg, #00e676, #00c853);
+      color: #000;
+      box-shadow: 0 0 18px rgba(0, 255, 136, 0.6);
+    }
+
+    .btn-maybe {
+      background: linear-gradient(135deg, #ffd54f, #ffb300);
+      color: #2a1b00;
+      box-shadow: 0 0 16px rgba(255, 214, 79, 0.5);
+    }
+
+    .btn-no {
+      background: linear-gradient(135deg, #ff5252, #ff1744);
+      color: #fff;
+      box-shadow: 0 0 16px rgba(255, 82, 82, 0.55);
+    }
+
+    .legend {
+      margin-top: 10px;
+      font-size: 11px;
+      color: var(--text-muted);
+      display: flex;
+      flex-wrap: wrap;
+      gap: 10px;
+      position: relative;
+      z-index: 1;
+    }
+
+    .legend-item {
+      display: inline-flex;
+      align-items: center;
+      gap: 5px;
+    }
+
+    .legend-dot {
+      width: 11px;
+      height: 11px;
+      border-radius: 999px;
+    }
+
+    .dot-suspect {
+      background: var(--accent-warning);
+      box-shadow: 0 0 10px rgba(244, 176, 0, 0.8);
+    }
+
+    .dot-confirmed {
+      background: var(--accent-danger);
+      box-shadow: 0 0 10px rgba(255, 75, 75, 0.9);
+    }
+
+    .dot-radius {
+      background: var(--accent-soft);
+    }
+
+    .footnote {
+      margin-top: 10px;
+      font-size: 10px;
+      color: var(--text-muted);
+      line-height: 1.4;
+      position: relative;
+      z-index: 1;
+    }
+
+    .footnote strong {
+      color: var(--accent);
+    }
+
+    /* Labels für Krankenhäuser / Schutzräume */
+
+    .capacity-label {
+      color: #e8f6ff;
+      font-size: 11px;
+      font-family: var(--font-mono);
+      text-align: center;
+      text-shadow: 0 0 4px #000;
+      padding: 1px 4px;
+      border-radius: 10px;
+      background: rgba(2, 5, 10, 0.8);
+      border: 1px solid rgba(0, 255, 136, 0.4);
+    }
+
+    .shelter-label {
+      border-color: rgba(0, 176, 255, 0.7);
+    }
+
+    @media (min-width: 720px) {
+      .app-shell {
+        padding-top: 24px;
+      }
+      header h1 {
+        font-size: 26px;
+      }
+      .map-wrapper {
+        height: 380px;
+      }
+    }
+  </style>
+</head>
+<body>
+  <div class="app-shell">
+    <div class="badge">
+      <span class="badge-dot"></span>
+      Live-Crowd-Radar
+    </div>
+
+    <header>
+      <h1><span>Nordradar</span> – iCatch</h1>
+      <p>Community-gestützte Drohnendetektion. Jede Meldung hilft, den Luftraum sicherer zu machen.</p>
+    </header>
+
+    <div class="status-card" id="statusCard">
+      <div id="statusMain" class="status-line-main ok">
+        Keine bestätigte Drohne im Umkreis.
+      </div>
+      <div id="statusSub" class="status-line-sub">
+        <span>JA: <strong id="countYes">0</strong></span>
+        <span>UNSICHER: <strong id="countMaybe">0</strong></span>
+        <span>NEIN: <strong id="countNo">0</strong></span>
+        <span>verifizierte JA: <strong id="countVerifiedYes">0</strong></span>
+      </div>
+    </div>
+
+    <div class="location-status" id="locationStatus">
+      Standort wird ermittelt…
+    </div>
+
+    <div class="map-wrapper">
+      <div id="map"></div>
+      <div class="map-overlay">
+        <div class="map-crosshair"></div>
+      </div>
+    </div>
+
+    <div class="controls-card">
+      <div class="toggle-row">
+        <span>Verifizierter Nutzer</span>
+        <label class="toggle-input">
+          <input type="checkbox" id="verifiedToggle" />
+          <span>aktiv</span>
+        </label>
+      </div>
+
+      <div class="buttons">
+        <button class="btn btn-yes" id="btnYes">JA – Drohne gesehen</button>
+        <button class="btn btn-maybe" id="btnMaybe">Ich bin unsicher</button>
+        <button class="btn btn-no" id="btnNo">NEIN – Keine Drohne</button>
+      </div>
+
+      <div class="legend">
+        <span class="legend-item">
+          <span class="legend-dot dot-radius"></span> Aktiver Radius (urban ca. 500 m, ländlich ca. 2 km)
+        </span>
+        <span class="legend-item">
+          <span class="legend-dot dot-suspect"></span> Vermutete Drohne
+        </span>
+        <span class="legend-item">
+          <span class="legend-dot dot-confirmed"></span> Bestätigte Drohne
+        </span>
+      </div>
+
+      <p class="footnote">
+        Logik: <strong>≥ 3× JA</strong> im Radius → Drohne in Lagekarte<br />
+        <strong>≥ 1× verifiziertes JA</strong> → DIC-Bestätigung (Prototyp, lokal – Dummy-Daten, kein Live-Backend).
+      </p>
+    </div>
+  </div>
+
+  <!-- Leaflet JS -->
+  <script
+    src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"
+    integrity="sha256-20nQCchB9co0qIjJZRGuk2/Z9VM+kNiyxNV1lvTlZBo="
+    crossorigin=""
+  ></script>
+
+  <script>
+    // --------------------------------------------------------------------
+    //  Demo-Daten – später durch echte Quellen / API / JSON ersetzbar
+    // --------------------------------------------------------------------
+
+    // Flugverbotszonen (Polygone)
+    const noFlyZones = [
+      {
+        name: "Leitstelle Schwerin",
+        reason: "Flugbeschränkungsgebiet – BOS-Leitstelle",
+        coords: [
+          [53.628, 11.401],
+          [53.632, 11.409],
+          [53.627, 11.415],
+          [53.623, 11.407]
+        ]
+      },
+      {
+        name: "Umspannwerk Nord",
+        reason: "KRITIS – Energieinfrastruktur",
+        coords: [
+          [53.64, 11.38],
+          [53.645, 11.387],
+          [53.642, 11.395]
+        ]
+      }
+    ];
+
+    // Krankenhäuser mit Kapazität
+    const hospitals = [
+      {
+        name: "Klinikum Schwerin",
+        lat: 53.635,
+        lng: 11.409,
+        occupied: 320,
+        capacity: 380
+      },
+      {
+        name: "Notfallklinik West",
+        lat: 53.63,
+        lng: 11.39,
+        occupied: 95,
+        capacity: 120
+      }
+    ];
+
+    // Schutzräume (Sporthallen, Tiefgaragen, große Keller)
+    const shelters = [
+      {
+        name: "Sporthalle Lankower Weg",
+        type: "Sporthalle",
+        lat: 53.63,
+        lng: 11.42,
+        occupied: 0,
+        capacity: 450
+      },
+      {
+        name: "Tiefgarage Innenstadt",
+        type: "Tiefgarage",
+        lat: 53.627,
+        lng: 11.41,
+        occupied: 0,
+        capacity: 700
+      }
+    ];
+
+    // --------------------------------------------------------------------
+    //  Basiszustand & Referenzen
+    // --------------------------------------------------------------------
+
+    const reports = [];
+    let map, userMarker, radiusCircle;
+    let suspectMarkers = [];
+    let confirmedMarker = null;
+    let nfzLayer, hospitalLayer, shelterLayer;
+
+    const statusMainEl = document.getElementById("statusMain");
+    const statusSubEl = document.getElementById("statusSub");
+    const locStatusEl = document.getElementById("locationStatus");
+    const verifiedToggle = document.getElementById("verifiedToggle");
+
+    const countYesEl = document.getElementById("countYes");
+    const countMaybeEl = document.getElementById("countMaybe");
+    const countNoEl = document.getElementById("countNo");
+    const countVerifiedYesEl = document.getElementById("countVerifiedYes");
+
+    // --------------------------------------------------------------------
+    //  Karte + Radarlogik
+    // --------------------------------------------------------------------
+
+    function getRadiusMeters() {
+      if (!map) return 1000;
+      const z = map.getZoom();
+      return z >= 15 ? 500 : 2000; // Städte enger, Land weiter
+    }
+
+    function initMap(lat, lng) {
+      map = L.map("map", {
+        zoomControl: false,
+        attributionControl: false
+      }).setView([lat, lng], 15);
+
+      // dunkle, taktische Basiskarte
+      L.tileLayer("https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png", {
+        maxZoom: 20
+      }).addTo(map);
+
+      userMarker = L.circleMarker([lat, lng], {
+        radius: 7,
+        color: "#00ff88",
+        fillColor: "#00ff88",
+        fillOpacity: 0.9
+      })
+        .addTo(map)
+        .bindPopup("Dein Standort");
+
+      radiusCircle = L.circle([lat, lng], {
+        radius: getRadiusMeters(),
+        color: "#1f5c3d",
+        fillColor: "#0b3824",
+        fillOpacity: 0.2,
+        weight: 1
+      }).addTo(map);
+
+      map.on("zoomend", () => {
+        if (radiusCircle) {
+          radiusCircle.setRadius(getRadiusMeters());
+        }
+      });
+
+      // Spezial-Layer
+      addNoFlyZones();
+      addHospitals();
+      addShelters();
+    }
+
+    function addNoFlyZones() {
+      nfzLayer = L.layerGroup().addTo(map);
+
+      noFlyZones.forEach((zone) => {
+        const poly = L.polygon(zone.coords, {
+          color: "#ff4b4b",
+          weight: 2,
+          fillColor: "#ff4b4b",
+          fillOpacity: 0.18,
+          dashArray: "6,4"
+        }).addTo(nfzLayer);
+
+        poly.bindPopup(
+          "<strong>Flugverbotszone</strong><br>" +
+          zone.name + "<br>" +
+          "<small>" + zone.reason + "</small>"
+        );
+      });
+    }
+
+    function addHospitals() {
+      hospitalLayer = L.layerGroup().addTo(map);
+
+      hospitals.forEach((h) => {
+        const ratio = h.occupied / h.capacity;
+        let color;
+        if (ratio >= 0.9) {
+          color = "#ff4b4b";       // überlastet
+        } else if (ratio >= 0.7) {
+          color = "#f4b000";       // angespannt
+        } else {
+          color = "#00ff88";       // ok
+        }
+
+        // Marker
+        L.circleMarker([h.lat, h.lng], {
+          radius: 8,
+          color,
+          fillColor: color,
+          fillOpacity: 0.9
+        })
+          .addTo(hospitalLayer)
+          .bindPopup(
+            "<strong>" + h.name + "</strong><br>" +
+            "Belegung: <strong>" + h.occupied + " / " + h.capacity + "</strong>"
+          );
+
+        // Label X/X
+        L.marker([h.lat, h.lng], {
+          icon: L.divIcon({
+            className: "capacity-label",
+            html: h.occupied + " / " + h.capacity,
+            iconSize: [60, 16],
+            iconAnchor: [30, -6]
+          })
+        }).addTo(hospitalLayer);
+      });
+    }
+
+    function addShelters() {
+      shelterLayer = L.layerGroup().addTo(map);
+
+      shelters.forEach((s) => {
+        const ratio = s.capacity === 0 ? 0 : s.occupied / s.capacity;
+        let color = "#00b0ff";
+
+        if (ratio >= 0.9) {
+          color = "#ff4b4b";
+        } else if (ratio >= 0.7) {
+          color = "#f4b000";
+        }
+
+        // Bereich um den Schutzraum (symbolisch 150 m)
+        L.circle([s.lat, s.lng], {
+          radius: 150,
+          color,
+          fillColor: color,
+          fillOpacity: 0.18,
+          weight: 1,
+          dashArray: "4,4"
+        })
+          .addTo(shelterLayer)
+          .bindPopup(
+            "<strong>" + s.name + "</strong><br>" +
+            s.type + "<br>" +
+            "Kapazität: <strong>" + s.capacity + "</strong>"
+          );
+
+        // Punkt im Zentrum
+        L.circleMarker([s.lat, s.lng], {
+          radius: 6,
+          color,
+          fillColor: color,
+          fillOpacity: 0.9
+        }).addTo(shelterLayer);
+
+        // Label X/X
+        L.marker([s.lat, s.lng], {
+          icon: L.divIcon({
+            className: "capacity-label shelter-label",
+            html: s.occupied + " / " + s.capacity,
+            iconSize: [60, 16],
+            iconAnchor: [30, -10]
+          })
+        }).addTo(shelterLayer);
+      });
+    }
+
+    function updateLocation() {
+      if (!navigator.geolocation) {
+        locStatusEl.textContent =
+          "Standort konnte nicht bestimmt werden (kein Geolocation-Support).";
+        // Fallback
+        if (!map) {
+          initMap(52.52, 13.405); // Berlin
+        }
+        return;
+      }
+
+      navigator.geolocation.getCurrentPosition(
+        (pos) => {
+          const { latitude, longitude } = pos.coords;
+          if (!map) {
+            initMap(latitude, longitude);
+          } else {
+            map.setView([latitude, longitude], 15);
+            userMarker.setLatLng([latitude, longitude]);
+            radiusCircle.setLatLng([latitude, longitude]);
+          }
+          locStatusEl.innerHTML =
+            "Aktueller Standort: <strong>" +
+            latitude.toFixed(5) +
+            " / " +
+            longitude.toFixed(5) +
+            "</strong>";
+        },
+        () => {
+          locStatusEl.textContent =
+            "Standort konnte nicht bestimmt werden (Zugriff verweigert oder Fehler).";
+          if (!map) {
+            initMap(52.52, 13.405);
+          }
+        },
+        { enableHighAccuracy: true, timeout: 7000, maximumAge: 10000 }
+      );
+    }
+
+    // --------------------------------------------------------------------
+    //  Drohnenmeldungen & Statuslogik
+    // --------------------------------------------------------------------
+
+    function addReport(confidence) {
+      if (!map) return;
+
+      const center = map.getCenter();
+      const isVerified = verifiedToggle && verifiedToggle.checked;
+
+      const report = {
+        lat: center.lat,
+        lng: center.lng,
+        confidence,
+        isVerified,
+        ts: Date.now()
+      };
+      reports.push(report);
+
+      if (confidence === "yes" || confidence === "maybe") {
+        const color = confidence === "yes" ? "#f4b000" : "#f4e000";
+        const m = L.circleMarker([report.lat, report.lng], {
+          radius: 10,
+          color,
+          fillColor: color,
+          fillOpacity: 0.85
+        })
+          .addTo(map)
+          .bindPopup(
+            (confidence === "yes" ? "JA" : "unsicher") +
+              (isVerified ? " (verifiziert)" : "")
+          );
+        suspectMarkers.push(m);
+      }
+
+      updateStatsAndStatus();
+    }
+
+    function updateStatsAndStatus() {
+      const yes = reports.filter((r) => r.confidence === "yes").length;
+      const maybe = reports.filter((r) => r.confidence === "maybe").length;
+      const no = reports.filter((r) => r.confidence === "no").length;
+      const verifiedYes = reports.filter(
+        (r) => r.confidence === "yes" && r.isVerified
+      ).length;
+
+      countYesEl.textContent = yes;
+      countMaybeEl.textContent = maybe;
+      countNoEl.textContent = no;
+      countVerifiedYesEl.textContent = verifiedYes;
+
+      const radius = getRadiusMeters();
+
+      let statusText = "Keine bestätigte Drohne im Umkreis.";
+      let statusMood = "ok";
+
+      const yesThreshold = yes >= 3;
+      const verifiedHit = verifiedYes >= 1;
+
+      if (verifiedHit) {
+        statusText =
+          "Drohne durch verifizierten Nutzer bestätigt. Radius ~" +
+          (radius / 1000).toFixed(1) +
+          " km.";
+        statusMood = "danger";
+      } else if (yesThreshold) {
+        statusText =
+          "Mehrere Meldungen: Drohne wahrscheinlich im Umkreis von ~" +
+          (radius / 1000).toFixed(1) +
+          " km.";
+        statusMood = "warn";
+      } else if (yes > 0 || maybe > 0) {
+        statusText =
+          "Vermutete Aktivität – weitere Meldungen zur Bestätigung erforderlich.";
+        statusMood = "warn";
+      }
+
+      statusMainEl.textContent = statusText;
+      statusMainEl.classList.remove("ok", "warn", "danger");
+      statusMainEl.classList.add(statusMood);
+
+      // Lagepunkt setzen
+      if (yesThreshold || verifiedHit) {
+        const yesReports = reports.filter((r) => r.confidence === "yes");
+        if (yesReports.length > 0) {
+          const avgLat =
+            yesReports.reduce((sum, r) => sum + r.lat, 0) / yesReports.length;
+          const avgLng =
+            yesReports.reduce((sum, r) => sum + r.lng, 0) / yesReports.length;
+
+          if (!confirmedMarker) {
+            confirmedMarker = L.circleMarker([avgLat, avgLng], {
+              radius: 12,
+              color: "#ff4b4b",
+              fillColor: "#ff4b4b",
+              fillOpacity: 0.9
+            })
+              .addTo(map)
+              .bindPopup("Bestätigte Drohne (Prototyp-Lagepunkt)");
+          } else {
+            confirmedMarker.setLatLng([avgLat, avgLng]);
+          }
+
+          suspectMarkers.forEach((m) => m.setStyle({ opacity: 0.4 }));
+        }
+      } else {
+        if (confirmedMarker) {
+          map.removeLayer(confirmedMarker);
+          confirmedMarker = null;
+        }
+        suspectMarkers.forEach((m) => m.setStyle({ opacity: 1 }));
+      }
+    }
+
+    // --------------------------------------------------------------------
+    //  Event-Handler & Init
+    // --------------------------------------------------------------------
+
+    document.getElementById("btnYes").addEventListener("click", () => {
+      addReport("yes");
+    });
+
+    document.getElementById("btnMaybe").addEventListener("click", () => {
+      addReport("maybe");
+    });
+
+    document.getElementById("btnNo").addEventListener("click", () => {
+      addReport("no");
+    });
+
+    // Start
+    updateLocation();
+  </script>
+</body>
+</html>
