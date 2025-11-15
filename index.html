@@ -162,7 +162,46 @@
       border-radius: 18px;
       border: 1px solid var(--border-subtle);
       padding: 10px 12px 12px;
+      position: relative;
+      overflow: hidden;
     }
+
+    /* Radar-Hintergrund im Controls-Card */
+    .radar-bg {
+      position: absolute;
+      inset: 0;
+      display: flex;
+      justify-content: center;
+      align-items: flex-start;
+      pointer-events: none;
+      opacity: 0.35;
+    }
+
+    .radar-bg svg {
+      width: 260px;
+      max-width: 80%;
+      margin-top: -10px;
+    }
+
+    .controls-inner {
+      position: relative;
+      z-index: 1;
+    }
+
+    .radar-sweep {
+      transform-origin: 50% 50%;
+      animation: radar-spin 10s linear infinite;
+    }
+
+    @keyframes radar-spin {
+      from {
+        transform: rotate(0deg);
+      }
+      to {
+        transform: rotate(360deg);
+      }
+    }
+    /* Ende Radar-Hintergrund */
 
     .toggle-row {
       display: flex;
@@ -325,36 +364,97 @@
     <div id="map"></div>
 
     <div class="controls-card">
-      <div class="toggle-row">
-        <span>Verifizierter Nutzer</span>
-        <label class="toggle-input">
-          <input type="checkbox" id="verifiedToggle" />
-          <span>aktiv</span>
-        </label>
+      <!-- Radar-Hintergrund -->
+      <div class="radar-bg" aria-hidden="true">
+        <svg viewBox="0 0 100 100">
+          <defs>
+            <radialGradient id="radarGradient" cx="50%" cy="50%" r="50%">
+              <stop offset="0%" stop-color="#0b1815" />
+              <stop offset="70%" stop-color="#02110a" />
+              <stop offset="100%" stop-color="#000000" />
+            </radialGradient>
+          </defs>
+
+          <!-- Hintergrund -->
+          <circle cx="50" cy="50" r="50" fill="url(#radarGradient)" />
+          <circle cx="50" cy="50" r="48" fill="none" stroke="#00ff88" stroke-width="0.4" opacity="0.4" />
+
+          <!-- Ringe -->
+          <circle cx="50" cy="50" r="12" fill="none" stroke="#00ff88" stroke-width="0.5" opacity="0.5" />
+          <circle cx="50" cy="50" r="24" fill="none" stroke="#00ff88" stroke-width="0.4" opacity="0.4" />
+          <circle cx="50" cy="50" r="36" fill="none" stroke="#00ff88" stroke-width="0.3" opacity="0.35" />
+          <circle cx="50" cy="50" r="48" fill="none" stroke="#00ff88" stroke-width="0.25" opacity="0.3" />
+
+          <!-- Linien -->
+          <line x1="50" y1="2" x2="50" y2="98" stroke="#00ff88" stroke-width="0.3" opacity="0.35" />
+          <line x1="2" y1="50" x2="98" y2="50" stroke="#00ff88" stroke-width="0.3" opacity="0.35" />
+          <line x1="14" y1="14" x2="86" y2="86" stroke="#00ff88" stroke-width="0.25" opacity="0.25" />
+          <line x1="86" y1="14" x2="14" y2="86" stroke="#00ff88" stroke-width="0.25" opacity="0.25" />
+
+          <!-- Punkte (grün) -->
+          <circle cx="68" cy="34" r="1.6" fill="#00ff88" />
+          <circle cx="32" cy="28" r="1.3" fill="#00ff88" />
+          <circle cx="61" cy="67" r="1.4" fill="#00ff88" />
+          <circle cx="28" cy="62" r="1.2" fill="#00ff88" />
+
+          <!-- Punkte (rot) -->
+          <circle cx="74" cy="56" r="1.8" fill="#ff4b4b" />
+          <circle cx="40" cy="73" r="1.5" fill="#ff4b4b" />
+
+          <!-- Sweep -->
+          <g class="radar-sweep">
+            <path
+              d="M50 50 L50 2 A48 48 0 0 1 90 18 Z"
+              fill="url(#sweepGradient)"
+              opacity="0.85"
+            />
+          </g>
+
+          <defs>
+            <linearGradient id="sweepGradient" x1="0%" y1="0%" x2="100%" y2="0%">
+              <stop offset="0%" stop-color="#00ff88" stop-opacity="0.7" />
+              <stop offset="80%" stop-color="#00ff88" stop-opacity="0" />
+            </linearGradient>
+          </defs>
+
+          <!-- Zentrumspunkt -->
+          <circle cx="50" cy="50" r="2" fill="#00ff88" />
+        </svg>
       </div>
 
-      <div class="buttons">
-        <button class="btn btn-yes" id="btnYes">JA – Drohne gesehen</button>
-        <button class="btn btn-maybe" id="btnMaybe">Ich bin unsicher</button>
-        <button class="btn btn-no" id="btnNo">NEIN – Keine Drohne</button>
-      </div>
+      <!-- Inhalt über dem Radar -->
+      <div class="controls-inner">
+        <div class="toggle-row">
+          <span>Verifizierter Nutzer</span>
+          <label class="toggle-input">
+            <input type="checkbox" id="verifiedToggle" />
+            <span>aktiv</span>
+          </label>
+        </div>
 
-      <div class="legend">
-        <span class="legend-item">
-          <span class="legend-dot dot-radius"></span> Aktiver Radius (urban ca. 500 m, ländlich ca. 2 km)
-        </span>
-        <span class="legend-item">
-          <span class="legend-dot dot-suspect"></span> Vermutete Drohne
-        </span>
-        <span class="legend-item">
-          <span class="legend-dot dot-confirmed"></span> Bestätigte Drohne
-        </span>
-      </div>
+        <div class="buttons">
+          <button class="btn btn-yes" id="btnYes">JA – Drohne gesehen</button>
+          <button class="btn btn-maybe" id="btnMaybe">Ich bin unsicher</button>
+          <button class="btn btn-no" id="btnNo">NEIN – Keine Drohne</button>
+        </div>
 
-      <p class="footnote">
-        Logik: <strong>≥ 3× JA</strong> im Radius → Drohne in Lagekarte<br />
-        <strong>≥ 1× verifiziertes JA</strong> → DIC-Bestätigung (Prototyp, lokal – noch ohne Backend).
-      </p>
+        <div class="legend">
+          <span class="legend-item">
+            <span class="legend-dot dot-radius"></span> Aktiver Radius (urban ca. 500 m, ländlich ca. 2 km)
+          </span>
+          <span class="legend-item">
+            <span class="legend-dot dot-suspect"></span> Vermutete Drohne
+          </span>
+          <span class="legend-item">
+            <span class="legend-dot dot-confirmed"></span> Bestätigte Drohne
+          </span>
+        </div>
+
+        <p class="footnote">
+          Logik: <strong>≥ 3× JA</strong> im Radius → Drohne in Lagekarte<br />
+          <strong>≥ 1× verifiziertes JA</strong> → DIC-Bestätigung (Prototyp, lokal – noch ohne Backend).
+        </p>
+      </div>
     </div>
   </div>
 
